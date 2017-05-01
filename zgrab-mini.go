@@ -8,13 +8,14 @@ import (
     "sync"
     "net"
     "io"
-    "fmt"
     "bufio"
     "strings"
     "encoding/json"
     "crypto/x509"
     "crypto/tls"
 )
+
+const maxReadLength = 4096
 
 const rootPEM = `
 -----BEGIN CERTIFICATE-----
@@ -76,17 +77,16 @@ func (gt *GrabTarget) GetAddress() (string) {
 type GrabResult struct {
     IP    string      `json:"ip"`
     Port  string      `json:"port"`
-    Time  time.Time   `json:"timestamp"`
-    Data  GrabData    `json:"data"`
-    Error string      `json:"error"`
+    Time  int32       `json:"timestamp"`
+    Data  *GrabData   `json:"data,omitempty"`
+    Error string      `json:"error,omitempty"`
 }
 
 type GrabData struct {
-    Banner string        `json:"banner"`
-    //Read         string        `json:"read"`
-    //Write        string        `json:"write"`
+    Banner       string        `json:"banner"`
     IsTLS        bool          `json:"is_tls"`
     TLSHandshake TLSHandshake  `json:"tls"`
+    Component    string        `json:"component"`
 }
 
 type GrabWorker struct {
@@ -103,30 +103,26 @@ func MakeDialer(c *Config) (net.Dialer) {
 
 func GrabBanner(c *Config, t GrabTarget) (GrabResult) {
     var err error
+    var data GrabData
 
     result := GrabResult{
         IP:   t.IP,
         Port: t.Port,
     }
-    data, err := GrabBannerBasic(c, &t)
+    data, err = GrabBannerBasic(c, &t)
     if err != nil {
-        //_ = data
-        //result.Error = err.Error()
-        //result.Time = time.Now()
-        //return result
         data, err = GrabBannerHTTPS(c, &t)
         if err != nil {
             data, err = GrabBannerHTTP(c, &t)
             if err != nil {
                 result.Error = err.Error()
-                result.Time = time.Now()
+                result.Time = int32(time.Now().Unix())
                 return result
             }
         }
     }
-
-    result.Data = data
-    result.Time = time.Now()
+    result.Data = &data
+    result.Time = int32(time.Now().Unix())
     return result
 }
 
@@ -141,12 +137,13 @@ func GrabBannerBasic(c *Config, t *GrabTarget) (data GrabData, err error) {
     defer conn.Close()
 
     conn.SetReadDeadline(time.Now().Add(c.Timeout))
-    buff := make([]byte, 4096)
+    buff := make([]byte, maxReadLength)
     n, err := conn.Read(buff)
     if err != nil {
         return data, err
     }
     data.Banner = string(buff[:n])
+    data.Component = "basic"
     return data, err
 }
 
@@ -167,12 +164,13 @@ func GrabBannerHTTP(c *Config, t *GrabTarget) (data GrabData, err error) {
     }
 
     conn.SetReadDeadline(time.Now().Add(c.Timeout))
-    buff := make([]byte, 4096)
+    buff := make([]byte, maxReadLength)
     n, err := conn.Read(buff)
     if err != nil {
         return data, err
     }
     data.Banner = string(buff[:n])
+    data.Component = "http"
     return data, err
 }
 
@@ -202,7 +200,7 @@ func GrabBannerHTTPS(c *Config, t *GrabTarget) (data GrabData, err error) {
     }
 
     tlsConn.SetReadDeadline(time.Now().Add(c.Timeout))
-    buff := make([]byte, 65535)
+    buff := make([]byte, maxReadLength)
     n, err := tlsConn.Read(buff)
     if err != nil {
         return data, err
@@ -216,6 +214,7 @@ func GrabBannerHTTPS(c *Config, t *GrabTarget) (data GrabData, err error) {
     tlsConn.ConnectionState()
 
     data.Banner = string(buff[:n])
+    data.Component = "https"
     return data, err
 }
 
@@ -297,14 +296,16 @@ func main() {
     defer inputFile.Close()
     defer outputFile.Close()
 
-    wg := sync.WaitGroup{}
-    wg.Add(int(config.Senders))
+    wgWorker := sync.WaitGroup{}
+    wgWorker.Add(int(config.Senders))
     for i := 0; i < int(config.Senders); i++ {
         worker := GrabWorker{in, out, &config}
-        worker.Start(&wg)
+        worker.Start(&wgWorker)
     }
 
-    go func() {
+    wgOutput := sync.WaitGroup{}
+    wgOutput.Add(1)
+    go func(wg *sync.WaitGroup) {
         for {
             result, ok := <-out
             if !ok {
@@ -314,7 +315,8 @@ func main() {
             if err != nil {
                 continue
             }
-            fmt.Println(string(encodeJSON))
+            outputFile.WriteString(string(encodeJSON) + "\n")
+            //fmt.Println(string(encodeJSON))
             //if result.Error != nil {
             //    fmt.Println(result.IP, result.Port, result.Time, result.Error)
             //    continue
@@ -322,7 +324,8 @@ func main() {
             //    fmt.Println(result.IP, result.Port, result.Time, result.Data.Banner)
             //}
         }
-    }()
+        wg.Done()
+    }(&wgOutput)
 
     reader := bufio.NewReader(inputFile)
     for {
@@ -343,6 +346,7 @@ func main() {
         }
     }
     close(in)
-
-    wg.Wait()
+    wgWorker.Wait()
+    close(out)
+    wgOutput.Wait()
 }
