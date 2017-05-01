@@ -208,6 +208,9 @@ func GrabBannerHTTPS(c *Config, t *GrabTarget) (data GrabData, err error) {
         return data, err
     }
 
+    // TODO: parse TLS infomations
+    //tlsConn.ConnectionState()
+    //data.TLSHandshake = xxxxx
     data.IsTLS = true
 
     tlsConn.ConnectionState()
