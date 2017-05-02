@@ -3,6 +3,7 @@ Minimal version for [github.com/zmap/zgrab](https://github.com/zmap/zgrab).
 ### Build
 
 ```
+$ go get
 $ go build zgrab-mini.go
 
 $ ./zgrab-mini.go -h
