@@ -1,19 +1,20 @@
 package main
 
 import (
+    "io"
     "os"
     "log"
+    "fmt"
+    "net"
     "time"
     "flag"
     "sync"
-    "net"
-    "io"
     "bufio"
     "strings"
+    
     "encoding/json"
     "crypto/x509"
     "crypto/tls"
-    "fmt"
 )
 
 const rootPEM = `
@@ -289,6 +290,8 @@ Usage of ./zgrab-mini:
     	Input filename, use - for stdin (default "-")
   -output-file string
     	Output filename, use - for stdout (default "-")
+  -read-max-length uint
+    	Max read length of banner (default 65535)
   -senders uint
     	Numbers of send coroutines to use (default 500)
   -timeout uint
