@@ -225,12 +225,6 @@ func GrabBannerHTTPS(c *Config, t *GrabTarget) (data GrabData, err error) {
         return data, err
     }
 
-    // TODO: parse TLS infomations
-    //stateJSON, err := json.Marshal(tlsConn.ConnectionState())
-    //if err != nil {
-    //    fmt.Println(string(stateJSON))
-    //}
-    //data.TLSHandshake = xxxxx
     data.TLSHandshake = tlsConn.GetHandshakeLog()
     data.IsTLS = true
 
