@@ -13,9 +13,8 @@ import (
     "encoding/json"
     "crypto/x509"
     "crypto/tls"
+    "fmt"
 )
-
-const maxReadLength = 4096
 
 const rootPEM = `
 -----BEGIN CERTIFICATE-----
@@ -57,10 +56,26 @@ type Summary struct {
     Failure   uint           `json:"failure_count"`
     Total     uint           `json:"total"`
     Senders   uint           `json:"senders"`
-    Timeout   time.Duration  `json:"timeout"`
-    StartTime string         `json:"start_time"`
-    EndTime   string         `json:"end_time"`
+    Timeout   uint           `json:"timeout"`
+    StartTime int32          `json:"start_time"`
+    EndTime   int32          `json:"end_time"`
 }
+
+var (
+    config Config
+    //outputConfig OutputConfig
+)
+
+var (
+    outputFileName string
+    inputFileName  string
+    inputFile      *os.File
+    outputFile     *os.File
+    timeout        uint
+    ignoreError    bool
+    summary        Summary
+    maxReadLength  uint
+)
 
 type TLSHandshake struct {
 }
@@ -232,25 +247,14 @@ func (gw *GrabWorker) Start(wg *sync.WaitGroup) {
     }()
 }
 
-var (
-    config Config
-    //outputConfig OutputConfig
-)
-
-var (
-    outputFileName string
-    inputFileName  string
-    inputFile      *os.File
-    outputFile     *os.File
-    timeout        uint
-)
-
 func init() {
     flag.StringVar(&inputFileName, "input-file", "-", "Input filename, use - for stdin")
     flag.StringVar(&outputFileName, "output-file", "-", "Output filename, use - for stdout")
 
     flag.UintVar(&config.Senders, "senders", 500, "Numbers of send coroutines to use")
     flag.UintVar(&timeout, "timeout", 10, "Set connection timeout in seconds")
+    flag.UintVar(&maxReadLength, "read-max-length", 65535, "Max read length of banner")
+    flag.BoolVar(&ignoreError, "ignore-error", false, "Ignore error output")
 
     flag.Parse()
 
@@ -278,16 +282,17 @@ func init() {
 }
 
 /*
-Usage: ./zgrab-mini -h
+Usage of ./zgrab-mini:
+  -ignore-error
+    	Ignore error output
   -input-file string
     	Input filename, use - for stdin (default "-")
   -output-file string
     	Output filename, use - for stdout (default "-")
   -senders uint
-    	Numbers of send coroutines to use (default 1000)
+    	Numbers of send coroutines to use (default 500)
   -timeout uint
     	Set connection timeout in seconds (default 10)
-
  */
 func main() {
     in := make(chan GrabTarget, config.Senders*5)
@@ -298,6 +303,8 @@ func main() {
 
     wgWorker := sync.WaitGroup{}
     wgWorker.Add(int(config.Senders))
+
+    summary.StartTime = int32(time.Now().Unix())
     for i := 0; i < int(config.Senders); i++ {
         worker := GrabWorker{in, out, &config}
         worker.Start(&wgWorker)
@@ -311,18 +318,22 @@ func main() {
             if !ok {
                 break
             }
+
+            summary.Total += 1
+            if result.Error != "" {
+                summary.Failure += 1
+                if ignoreError {
+                    continue
+                }
+            } else {
+                summary.Success += 1
+            }
+
             encodeJSON, err := json.Marshal(result)
             if err != nil {
                 continue
             }
             outputFile.WriteString(string(encodeJSON) + "\n")
-            //fmt.Println(string(encodeJSON))
-            //if result.Error != nil {
-            //    fmt.Println(result.IP, result.Port, result.Time, result.Error)
-            //    continue
-            //} else {
-            //    fmt.Println(result.IP, result.Port, result.Time, result.Data.Banner)
-            //}
         }
         wg.Done()
     }(&wgOutput)
@@ -349,4 +360,13 @@ func main() {
     wgWorker.Wait()
     close(out)
     wgOutput.Wait()
+
+    summary.Timeout = timeout
+    summary.Senders = config.Senders
+    summary.EndTime = int32(time.Now().Unix())
+    summaryJSON, err := json.Marshal(summary)
+    if err != nil {
+        panic(err)
+    }
+    fmt.Println(string(summaryJSON))
 }
