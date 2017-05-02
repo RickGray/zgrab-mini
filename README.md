@@ -8,10 +8,14 @@ $ go build zgrab-mini.go
 
 $ ./zgrab-mini.go -h
 Usage of ./zgrab-mini:
+  -ignore-error
+    	Ignore error output
   -input-file string
     	Input filename, use - for stdin (default "-")
   -output-file string
     	Output filename, use - for stdout (default "-")
+  -read-max-length uint
+    	Max read length of banner (default 65535)
   -senders uint
     	Numbers of send coroutines to use (default 500)
   -timeout uint
