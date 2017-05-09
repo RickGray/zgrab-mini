@@ -30,6 +30,7 @@ type Summary struct {
     Timeout   uint           `json:"timeout"`
     StartTime int32          `json:"start_time"`
     EndTime   int32          `json:"end_time"`
+    Cost      int32          `json:"cost"`
 }
 
 var (
@@ -42,7 +43,9 @@ var (
     inputFile      *os.File
     outputFile     *os.File
     timeout        uint
+    notSaveTLS     bool
     ignoreError    bool
+    ignoreMetaLog  bool
     summary        Summary
     maxReadLength  uint
 )
@@ -182,7 +185,11 @@ func GrabBannerHTTPS(c *Config, t *GrabTarget) (data GrabData, err error) {
         return data, err
     }
 
-    data.TLSHandshake = tlsConn.GetHandshakeLog()
+    if notSaveTLS {
+        data.TLSHandshake = nil
+    } else {
+        data.TLSHandshake = tlsConn.GetHandshakeLog()
+    }
     data.IsTLS = true
 
     data.Banner = string(buff[:n])
@@ -212,6 +219,9 @@ func init() {
     flag.UintVar(&timeout, "timeout", 10, "Set connection timeout in seconds")
     flag.UintVar(&maxReadLength, "read-max-length", 65535, "Max read length of banner")
     flag.BoolVar(&ignoreError, "ignore-error", false, "Ignore error output")
+    flag.BoolVar(&ignoreMetaLog, "ignore-meta-log", false, "Ignore metadata log")
+
+    flag.BoolVar(&notSaveTLS, "not-save-tls", false, "Not save TLS certs")
 
     flag.Parse()
 
@@ -277,7 +287,6 @@ func main() {
             if !ok {
                 break
             }
-
             summary.Total += 1
             if result.Error != "" {
                 summary.Failure += 1
@@ -296,6 +305,21 @@ func main() {
         }
         wg.Done()
     }(&wgOutput)
+
+    go func() {
+        if !ignoreMetaLog {
+            speed := int32(0)
+            time.Sleep(time.Duration(1) * time.Second)
+            for {
+                speed = int32(summary.Total)/(int32(time.Now().Unix())-summary.StartTime)
+                log.Printf("[MetaLog] total: %d, success: %d, failure: %d (%d/s)", summary.Total,
+                    summary.Success, summary.Failure, speed)
+                time.Sleep(time.Duration(2) * time.Second)
+            }
+        } else {
+            return
+        }
+    }()
 
     reader := bufio.NewReader(inputFile)
     for {
@@ -323,6 +347,7 @@ func main() {
     summary.Timeout = timeout
     summary.Senders = config.Senders
     summary.EndTime = int32(time.Now().Unix())
+    summary.Cost = summary.EndTime - summary.StartTime
     summaryJSON, err := json.Marshal(summary)
     if err != nil {
         panic(err)
