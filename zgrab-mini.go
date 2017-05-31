@@ -12,6 +12,7 @@ import (
     "bufio"
     "strings"
 
+    "io/ioutil"
     "encoding/json"
 
     "github.com/zmap/zcrypto/tls"
@@ -20,6 +21,7 @@ import (
 type Config struct {
     Senders uint
     Timeout time.Duration
+    Data    []byte
 }
 
 type Summary struct {
@@ -47,7 +49,10 @@ var (
     maxReadLength  uint
     saveTLS        bool
     saveError      bool
+    dataFileName   string
     ignoreMetaLog  bool
+    dataFile       *os.File
+    customData     bool
 )
 
 type GrabTarget struct {
@@ -100,9 +105,14 @@ func GrabBanner(c *Config, t GrabTarget) (GrabResult) {
         if err != nil {
             data, err = GrabBannerHTTP(c, &t)
             if err != nil {
-                result.Error = err.Error()
-                result.Time = int32(time.Now().Unix())
-                return result
+                if customData {
+                    data, err = GrabBannerData(c, &t)
+                }
+                if err != nil {
+                    result.Error = err.Error()
+                    result.Time = int32(time.Now().Unix())
+                    return result
+                }
             }
         }
     }
@@ -197,6 +207,33 @@ func GrabBannerHTTPS(c *Config, t *GrabTarget) (data GrabData, err error) {
     return data, err
 }
 
+func GrabBannerData(c *Config, t *GrabTarget) (data GrabData, err error) {
+    address := t.GetAddress()
+    dialer := MakeDialer(c)
+
+    conn, err := dialer.Dial("tcp", address)
+    if err != nil {
+        return data, err
+    }
+    defer conn.Close()
+
+    conn.SetWriteDeadline(time.Now().Add(c.Timeout))
+    _, err = conn.Write(c.Data)
+    if err != nil {
+        return data, err
+    }
+
+    conn.SetReadDeadline(time.Now().Add(c.Timeout))
+    buff := make([]byte, maxReadLength)
+    n, err := conn.Read(buff)
+    if err != nil {
+        return data, err
+    }
+    data.Banner = string(buff[:n])
+    data.Component = "data"
+    return data, err
+}
+
 func (gw *GrabWorker) Start(wg *sync.WaitGroup) {
     go func() {
         for {
@@ -224,6 +261,8 @@ func init() {
 
     flag.BoolVar(&ignoreMetaLog, "ignore-meta-log", false, "Ignore metadata log")
 
+    flag.StringVar(&dataFileName, "data-file", "", "Send data to grab banner when empty captured")
+
     flag.Parse()
 
     config.Timeout = time.Duration(timeout) * time.Second
@@ -247,10 +286,23 @@ func init() {
             log.Fatal(err)
         }
     }
+
+    if dataFileName != "" {
+        if dataFile, err = os.Open(dataFileName); err != nil {
+            log.Fatal(err)
+        }
+        buff, _ := ioutil.ReadAll(dataFile)
+        config.Data = buff
+        customData = true
+    } else {
+        customData = false
+    }
 }
 
 /*
 Usage of ./zgrab-mini:
+  -data-file string
+    	Send data to grab banner when empty captured
   -ignore-meta-log
     	Ignore metadata log
   -input-file string

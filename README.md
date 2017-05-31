@@ -8,18 +8,20 @@ $ go build zgrab-mini.go
 
 $ ./zgrab-mini.go -h
 Usage of ./zgrab-mini:
-  -ignore-error
-    	Ignore error output
+  -data-file string
+    	Send data to grab banner when empty captured
   -ignore-meta-log
     	Ignore metadata log
   -input-file string
     	Input filename, use - for stdin (default "-")
-  -not-save-tls
-    	Not save TLS certs
   -output-file string
     	Output filename, use - for stdout (default "-")
   -read-max-length uint
     	Max read length of banner (default 65535)
+  -save-error
+    	If save error exception
+  -save-tls
+    	If save TLS certs
   -senders uint
     	Numbers of send coroutines to use (default 500)
   -timeout uint
@@ -40,5 +42,5 @@ Usage of ./zgrab-mini:
 
 ### TODO
 
-- [ ] Protocol Data Definition Support
+- [x] Protocol Data Definition Support
 - [ ] Protocol Data Rules File Support
