@@ -43,11 +43,11 @@ var (
     inputFile      *os.File
     outputFile     *os.File
     timeout        uint
-    notSaveTLS     bool
-    ignoreError    bool
-    ignoreMetaLog  bool
     summary        Summary
     maxReadLength  uint
+    saveTLS        bool
+    saveError      bool
+    ignoreMetaLog  bool
 )
 
 type GrabTarget struct {
@@ -185,7 +185,7 @@ func GrabBannerHTTPS(c *Config, t *GrabTarget) (data GrabData, err error) {
         return data, err
     }
 
-    if notSaveTLS {
+    if !saveTLS {
         data.TLSHandshake = nil
     } else {
         data.TLSHandshake = tlsConn.GetHandshakeLog()
@@ -218,10 +218,11 @@ func init() {
     flag.UintVar(&config.Senders, "senders", 500, "Numbers of send coroutines to use")
     flag.UintVar(&timeout, "timeout", 10, "Set connection timeout in seconds")
     flag.UintVar(&maxReadLength, "read-max-length", 65535, "Max read length of banner")
-    flag.BoolVar(&ignoreError, "ignore-error", false, "Ignore error output")
-    flag.BoolVar(&ignoreMetaLog, "ignore-meta-log", false, "Ignore metadata log")
 
-    flag.BoolVar(&notSaveTLS, "not-save-tls", false, "Not save TLS certs")
+    flag.BoolVar(&saveError, "save-error", false, "If save error exception")
+    flag.BoolVar(&saveTLS, "save-tls", false, "If save TLS certs")
+
+    flag.BoolVar(&ignoreMetaLog, "ignore-meta-log", false, "Ignore metadata log")
 
     flag.Parse()
 
@@ -250,14 +251,18 @@ func init() {
 
 /*
 Usage of ./zgrab-mini:
-  -ignore-error
-    	Ignore error output
+  -ignore-meta-log
+    	Ignore metadata log
   -input-file string
     	Input filename, use - for stdin (default "-")
   -output-file string
     	Output filename, use - for stdout (default "-")
   -read-max-length uint
     	Max read length of banner (default 65535)
+  -save-error
+    	If save error exception
+  -save-tls
+    	If save TLS certs
   -senders uint
     	Numbers of send coroutines to use (default 500)
   -timeout uint
@@ -290,7 +295,7 @@ func main() {
             summary.Total += 1
             if result.Error != "" {
                 summary.Failure += 1
-                if ignoreError {
+                if !saveError {
                     continue
                 }
             } else {
@@ -311,7 +316,7 @@ func main() {
             speed := int32(0)
             time.Sleep(time.Duration(1) * time.Second)
             for {
-                speed = int32(summary.Total)/(int32(time.Now().Unix())-summary.StartTime)
+                speed = int32(summary.Total) / (int32(time.Now().Unix()) - summary.StartTime)
                 log.Printf("[MetaLog] total: %d, success: %d, failure: %d (%d/s)", summary.Total,
                     summary.Success, summary.Failure, speed)
                 time.Sleep(time.Duration(2) * time.Second)
