@@ -40,4 +40,5 @@ Usage of ./zgrab-mini:
 
 ### TODO
 
-- [ ] Protocl Data Definition Support
+- [ ] Protocol Data Definition Support
+- [ ] Protocol Data Rules File Support
