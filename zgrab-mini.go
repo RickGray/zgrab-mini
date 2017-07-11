@@ -73,6 +73,7 @@ type GrabResult struct {
 }
 
 type GrabData struct {
+    BannerBytes  []byte                `json:"banner_bytes"`
     Banner       string                `json:"banner"`
     IsTLS        bool                  `json:"is_tls"`
     TLSHandshake *tls.ServerHandshake  `json:"tls"`
@@ -137,6 +138,7 @@ func GrabBannerBasic(c *Config, t *GrabTarget) (data GrabData, err error) {
     if err != nil {
         return data, err
     }
+    data.BannerBytes = buff[:n]
     data.Banner = string(buff[:n])
     data.Component = "basic"
     return data, err
@@ -164,11 +166,13 @@ func GrabBannerHTTP(c *Config, t *GrabTarget) (data GrabData, err error) {
     if err != nil {
         return data, err
     }
+    data.BannerBytes = buff[:n]
     data.Banner = string(buff[:n])
     data.Component = "http"
     return data, err
 }
 
+// TODO: 解决 HTTPS 读取 Banner 时，无法获取完全的 BUG（通常获取到 Headers 就返回了）
 func GrabBannerHTTPS(c *Config, t *GrabTarget) (data GrabData, err error) {
     address := t.GetAddress()
     dialer := MakeDialer(c)
@@ -202,6 +206,7 @@ func GrabBannerHTTPS(c *Config, t *GrabTarget) (data GrabData, err error) {
     }
     data.IsTLS = true
 
+    data.BannerBytes = buff[:n]
     data.Banner = string(buff[:n])
     data.Component = "https"
     return data, err
@@ -229,6 +234,7 @@ func GrabBannerData(c *Config, t *GrabTarget) (data GrabData, err error) {
     if err != nil {
         return data, err
     }
+    data.BannerBytes = buff[:n]
     data.Banner = string(buff[:n])
     data.Component = "data"
     return data, err
