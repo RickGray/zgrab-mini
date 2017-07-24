@@ -102,18 +102,17 @@ func GrabBanner(c *Config, t GrabTarget) (GrabResult) {
     }
     data, err = GrabBannerBasic(c, &t)
     if err != nil {
-        data, err = GrabBannerHTTPS(c, &t)
+        if customData {
+            data, err = GrabBannerData(c, &t)
+        } else {
+            data, err = GrabBannerHTTPS(c, &t)
+        }
         if err != nil {
             data, err = GrabBannerHTTP(c, &t)
             if err != nil {
-                if customData {
-                    data, err = GrabBannerData(c, &t)
-                }
-                if err != nil {
-                    result.Error = err.Error()
-                    result.Time = int32(time.Now().Unix())
-                    return result
-                }
+                result.Error = err.Error()
+                result.Time = int32(time.Now().Unix())
+                return result
             }
         }
     }
