@@ -154,7 +154,7 @@ func GrabBannerHTTP(c *Config, t *GrabTarget) (data GrabData, err error) {
     defer conn.Close()
 
     conn.SetWriteDeadline(time.Now().Add(c.Timeout))
-    _, err = conn.Write([]byte("GET / HTTP/1.1\r\nHost: " + address + "\r\n\r\n"))
+    _, err = conn.Write([]byte("GET /webclient/ HTTP/1.1\r\nHost: " + address + "\r\n\r\n"))
     if err != nil {
         return data, err
     }
@@ -186,7 +186,7 @@ func GrabBannerHTTPS(c *Config, t *GrabTarget) (data GrabData, err error) {
     defer tlsConn.Close()
 
     tlsConn.SetWriteDeadline(time.Now().Add(c.Timeout))
-    _, err = tlsConn.Write([]byte("GET / HTTP/1.1\r\nHost: " + address + "\r\n\r\n"))
+    _, err = tlsConn.Write([]byte("GET /webclient/ HTTP/1.1\r\nHost: " + address + "\r\n\r\n"))
     if err != nil {
         return data, err
     }
